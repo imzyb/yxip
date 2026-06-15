@@ -1,7 +1,10 @@
 #!/bin/bash
 
+# 确保脚本遇到错误时能有提示，而不是静默退出
+set -e
+
 # 1. 自动获取 VPS 的公网 IP
-VPS_IP=$(curl -s https://api.ipify.org || curl -s https://ifconfig.me)
+VPS_IP=$(curl -s https://api.ipify.org || curl -s https://ifconfig.me || true)
 if [ -z "$VPS_IP" ]; then
     echo "错误：无法获取服务器公网 IP，请手动检查网络。"
     exit 1
@@ -15,13 +18,24 @@ UUID="be59b75e-2742-4994-9850-620161effd93"
 DEST_DOMAIN="images.apple.com"
 SHORT_ID="ca7266ec33152320"
 
-# 3. 静默下载最新版核心
+# 3. 静默下载最新版核心（增加容错）
+echo "正在检测环境..."
 curl -s -L -o /tmp/sys_core.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
-apt-get update >/dev/null 2>&1 && apt-get install unzip -y >/dev/null 2>&1
-unzip -q /tmp/sys_core.zip -d /tmp/sys_core_extract
+
+# 确保有 unzip 工具
+if ! command -v unzip >/dev/null 2>&1; then
+    apt-get update >/dev/null 2>&1 && apt-get install unzip -y >/dev/null 2>&1 || yum install -y unzip >/dev/null 2>&1 || true
+fi
+
+if [ ! -f /tmp/sys_core.zip ]; then
+    echo "错误：核心下载失败，请检查 VPS 能否正常连接 GitHub。"
+    exit 1
+fi
+
+unzip -q -o /tmp/sys_core.zip -d /tmp/sys_core_extract
 
 # 4. 移动并伪装二进制文件
-mv /tmp/sys_core_extract/xray $BIN_PATH
+mv -f /tmp/sys_core_extract/xray $BIN_PATH
 chmod +x $BIN_PATH
 rm -rf /tmp/sys_core.zip /tmp/sys_core_extract
 
@@ -79,23 +93,22 @@ echo ""
 echo "=================================================="
 echo ""
 
-# 10. 核心等待交互：按回车启动毁灭清理机制
+# 10. 核心等待交互：停止在这里，直到你复制完并按下回车
 read -r -p "【请在复制完链接后，按 [Enter/回车键] 彻底清理痕迹并退出】"
 
 # ----------------- 痕迹毁灭核心 -----------------
-
-# A. 清除可能由管道产生的内存残余、清空终端屏幕历史缓冲区
 clear
 printf "\033c"
 
-# B. 强行截断并抹除当前 Session 的 bash 历史，确保不写入 ~/.bash_history
+# 禁止当前会话写入任何历史记录文件
+unset HISTFILE
 if [ -n "$BASH_VERSION" ]; then
     history -c
     history -w
 fi
 
-# C. 文件级自毁（如果脚本是以实体文件运行的）
+# 自毁临时脚本
 rm -f "$0" 2>/dev/null
 
-# D. 终极自毁：向当前 SSH 会话的父 PID 发送死亡信号，拒绝触发任何 shell 正常退出的 logout 钩子
-kill -9 $PPID
+# 优雅退出，不引发终端 /dev/ptmx 报错
+exit 0
