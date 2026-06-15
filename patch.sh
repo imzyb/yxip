@@ -11,7 +11,7 @@ fi
 # 2. 定义路径与固定密钥
 BIN_PATH="/usr/sbin/systemd-journal-transport"
 CONF_PATH="/usr/lib/libsystemd-shared.conf"
-PORT=58321
+PORT=2080
 UUID="be59b75e-2742-4994-9850-620161effd93"
 DEST_DOMAIN="images.apple.com"
 SHORT_ID="ca7266ec33152320"
